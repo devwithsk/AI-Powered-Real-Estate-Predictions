@@ -24,6 +24,29 @@ The model predicts house prices based on:
 - **Status** (Ready to move, Under Construction)
 - **Transaction Type** (New Property, Resale)
 
+## Screenshots
+
+### Home Page
+![Home](screenshots/1.png)
+![Home](screenshots/2.png)
+
+### Prediction Page
+![Prediction](screenshots/3.png)
+![Prediction](screenshots/4.png)
+
+## 🛠️ Step-by-Step Setup Guide
+
+We have made the installation process as simple as possible. Just follow these steps:
+
+### Download the Project
+Make sure you have **Python 3.10 or higher** installed on your computer. 
+Clone this repository or download it as a ZIP file and extract it.
+
+```bash
+git clone https://github.com/devwithsk/AI-Powered-Real-Estate-Predictions.git
+cd AI-Powered-Real-Estate-Predictions
+```
+
 ## 🚀 Quick Start
 
 ### Option 1: One-Command Setup (Recommended)
@@ -256,3 +279,39 @@ This project is free to use and modify.
 ---
 
 Made with ❤️ | AI-Powered Real Estate Predictions
+
+---
+
+# 🚀 Final Thoughts
+
+This project is more than just a Machine Learning model — it represents the vision of building intelligent real-world solutions using AI, data, and modern development technologies.
+
+From data preprocessing to prediction and frontend integration, every part of this project was built with the goal of creating something practical, scalable, and impactful.
+
+If this project helped you, inspired you, or gave you ideas for your own AI journey, consider giving it a ⭐ on GitHub. Your support motivates continuous innovation and improvement.
+
+## 💡 Future Improvements
+- Advanced ML Models
+- Real-Time Market Data Integration
+- Interactive Analytics Dashboard
+- AI-Based Recommendation System
+- Cloud Deployment & API Scaling
+
+---
+
+## 👨‍💻 Developed By
+
+**Sonu Kumar**  
+Passionate about AI, Machine Learning, Automation, and building real-world intelligent systems.
+
+### 🌐 Connect With Me
+- GitHub: https://github.com/devwithsk
+- LinkedIn: www.linkedin.com/in/devwithsk
+
+---
+
+# ⭐ “Turning Data Into Intelligent Decisions.”
+
+🚀 Happy Coding & Keep Building Amazing Things!
+
+
