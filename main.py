@@ -1,230 +1,141 @@
+"""
+House Price Prediction - Quick Test Script
+This script tests the trained model with sample data.
+
+For training/retraining the model, run: python train_model.py
+"""
+
 import pandas as pd
 import numpy as np
 import joblib
+import os
 
-# Machine Learning Libraries
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-
-# Encoding
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
+print("=" * 60)
+print("HOUSE PRICE PREDICTION - MODEL TEST")
+print("=" * 60)
 
 # =========================================
-# STEP 1 — LOAD DATASET
+# LOAD MODEL
 # =========================================
+print("\n[1/3] Loading trained model...")
 
-df = pd.read_csv("Delhi_house_data.csv")
+MODEL_PATH = os.path.join('backend', 'model.pkl')
 
-print("Dataset Loaded Successfully!\n")
+if not os.path.exists(MODEL_PATH):
+    print(f"✗ Error: Model not found at {MODEL_PATH}")
+    print("Please run 'python train_model.py' to train the model first.")
+    exit(1)
 
-print(df.head())
-
-# =========================================
-# STEP 2 — HANDLE MISSING VALUES
-# =========================================
-
-# Numerical columns
-numerical_columns = [
-    "Area",
-    "BHK",
-    "Bathroom",
-    "Parking"
-]
-
-# Fill numerical missing values with mean
-num_imputer = SimpleImputer(strategy="mean")
-
-df[numerical_columns] = num_imputer.fit_transform(
-    df[numerical_columns]
-)
-
-# Categorical columns
-categorical_fill_columns = [
-    "Furnishing",
-    "Locality",
-    "Status",
-    "Transaction",
-    "Type"
-]
-
-# Fill categorical missing values with most frequent value
-cat_imputer = SimpleImputer(strategy="most_frequent")
-
-df[categorical_fill_columns] = cat_imputer.fit_transform(
-    df[categorical_fill_columns]
-)
+try:
+    model = joblib.load(MODEL_PATH)
+    print("✓ Model loaded successfully!")
+except Exception as e:
+    print(f"✗ Error loading model: {e}")
+    exit(1)
 
 # =========================================
-# FEATURE ENGINEERING
+# LOAD METADATA
 # =========================================
+print("\n[2/3] Loading model metadata...")
 
-# Total rooms feature
-df["TotalRooms"] = df["BHK"] + df["Bathroom"]
+METADATA_PATH = os.path.join('backend', 'model_metadata.json')
 
-# =========================================
-# HANDLE Per_Sqft MISSING VALUES
-# =========================================
-
-df["Per_Sqft"] = df["Per_Sqft"].fillna(
-    df["Per_Sqft"].median()
-)
-
-# =========================================
-# REMOVE OUTLIERS USING IQR
-# =========================================
-
-Q1 = df["Price"].quantile(0.25)
-
-Q3 = df["Price"].quantile(0.75)
-
-IQR = Q3 - Q1
-
-lower_limit = Q1 - 1.5 * IQR
-
-upper_limit = Q3 + 1.5 * IQR
-
-df = df[
-    (df["Price"] >= lower_limit) &
-    (df["Price"] <= upper_limit)
-]
-
-print("\nOutliers Removed Successfully!")
-
-print(f"Remaining Rows: {len(df)}")
+if os.path.exists(METADATA_PATH):
+    import json
+    with open(METADATA_PATH, 'r') as f:
+        metadata = json.load(f)
+    
+    print("✓ Model Metadata:")
+    print(f"  - Created: {metadata['timestamp']}")
+    print(f"  - Test R² Score: {metadata['test_r2']:.4f}")
+    print(f"  - Test MAE: ₹ {metadata['test_mae']:,.2f}")
+    print(f"  - Training Samples: {metadata['training_samples']}")
+else:
+    print("✗ Metadata file not found (expected after training)")
 
 # =========================================
-# STEP 3 — FEATURES & TARGET
+# TEST PREDICTION
 # =========================================
+print("\n[3/3] Making sample predictions...\n")
 
-X = df.drop("Price", axis=1)
-
-y = df["Price"]
-
-# =========================================
-# STEP 4 — CATEGORICAL COLUMNS
-# =========================================
-
-categorical_columns = [
-    "Furnishing",
-    "Locality",
-    "Status",
-    "Transaction",
-    "Type"
-]
-
-# =========================================
-# STEP 5 — PREPROCESSING
-# =========================================
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        (
-            "cat",
-            OneHotEncoder(handle_unknown="ignore"),
-            categorical_columns
-        )
-    ],
-    remainder="passthrough"
-)
-
-# =========================================
-# STEP 6 — CREATE PIPELINE
-# =========================================
-
-model = Pipeline(steps=[
-    ("preprocessor", preprocessor),
-    ("regressor", RandomForestRegressor(
-        n_estimators=200,
-        random_state=42,
-        n_jobs=-1,
-        max_depth=20,
-        min_samples_split=5
-    ))
-])
-
-# =========================================
-# STEP 7 — TRAIN TEST SPLIT
-# =========================================
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42
-)
-
-# =========================================
-# STEP 8 — TRAIN MODEL
-# =========================================
-
-model.fit(X_train, y_train)
-
-print("\nModel Training Completed!")
-
-# =========================================
-# STEP 9 — PREDICTIONS
-# =========================================
-
-predictions = model.predict(X_test)
-
-print("\nSome Predictions:\n")
-
-for i in range(5):
-    print(f"Predicted: ₹ {predictions[i]:.2f}")
-    print(f"Actual:    ₹ {y_test.iloc[i]:.2f}")
-    print()
-
-# =========================================
-# STEP 10 — MODEL EVALUATION
-# =========================================
-
-mae = mean_absolute_error(y_test, predictions)
-
-r2 = r2_score(y_test, predictions)
-
-print("Model Performance:\n")
-
-print(f"Mean Absolute Error: ₹ {mae:.2f}")
-
-print(f"R2 Score: {r2:.2f}")
-
-# =========================================
-# STEP 11 — CUSTOM PREDICTION
-# =========================================
-
-sample_house = pd.DataFrame({
+# Example 1: Budget 2 BHK in Dwarka
+sample_house_1 = pd.DataFrame({
     "Area": [1200],
-    "BHK": [3],
+    "BHK": [2],
     "Bathroom": [2],
     "Furnishing": ["Semi-Furnished"],
-    "Locality": ["Rohini Sector 24"],
+    "Locality": ["Dwarka Sector 12"],
     "Parking": [1],
     "Status": ["Ready_to_move"],
     "Transaction": ["New_Property"],
     "Type": ["Apartment"],
-    "Per_Sqft": [6500]
+    "Per_Sqft": [5000]
 })
+sample_house_1["TotalRooms"] = sample_house_1["BHK"] + sample_house_1["Bathroom"]
 
-# Feature Engineering for sample input
-sample_house["TotalRooms"] = (
-    sample_house["BHK"] +
-    sample_house["Bathroom"]
-)
+# Example 2: Luxury 3 BHK in Indirapuram
+sample_house_2 = pd.DataFrame({
+    "Area": [1800],
+    "BHK": [3],
+    "Bathroom": [3],
+    "Furnishing": ["Furnished"],
+    "Locality": ["Indirapuram"],
+    "Parking": [2],
+    "Status": ["Ready_to_move"],
+    "Transaction": ["Resale"],
+    "Type": ["Villa"],
+    "Per_Sqft": [5000]
+})
+sample_house_2["TotalRooms"] = sample_house_2["BHK"] + sample_house_2["Bathroom"]
 
-predicted_price = model.predict(sample_house)
+# Example 3: Under construction 4 BHK in Sector 62
+sample_house_3 = pd.DataFrame({
+    "Area": [2400],
+    "BHK": [4],
+    "Bathroom": [3],
+    "Furnishing": ["Unfurnished"],
+    "Locality": ["Sector 62"],
+    "Parking": [3],
+    "Status": ["Under_Construction"],
+    "Transaction": ["New_Property"],
+    "Type": ["Independent_House"],
+    "Per_Sqft": [5000]
+})
+sample_house_3["TotalRooms"] = sample_house_3["BHK"] + sample_house_3["Bathroom"]
 
-print("\nPredicted House Price:\n")
+# Make predictions
+print("Example 1: Budget Apartment in Dwarka")
+print("-" * 60)
+pred_1 = model.predict(sample_house_1)[0]
+print(f"Area: {sample_house_1['Area'].values[0]} sq ft")
+print(f"Configuration: {sample_house_1['BHK'].values[0]} BHK, {sample_house_1['Bathroom'].values[0]} Bathrooms")
+print(f"Location: {sample_house_1['Locality'].values[0]}")
+print(f"Furnishing: {sample_house_1['Furnishing'].values[0]}")
+print(f"Predicted Price: ₹ {pred_1:,.2f}")
+print(f"Price Range: ₹ {pred_1*0.9:,.2f} - ₹ {pred_1*1.1:,.2f}\n")
 
-print(f"₹ {predicted_price[0]:.2f}")
+print("Example 2: Luxury Villa in Indirapuram")
+print("-" * 60)
+pred_2 = model.predict(sample_house_2)[0]
+print(f"Area: {sample_house_2['Area'].values[0]} sq ft")
+print(f"Configuration: {sample_house_2['BHK'].values[0]} BHK, {sample_house_2['Bathroom'].values[0]} Bathrooms")
+print(f"Location: {sample_house_2['Locality'].values[0]}")
+print(f"Furnishing: {sample_house_2['Furnishing'].values[0]}")
+print(f"Predicted Price: ₹ {pred_2:,.2f}")
+print(f"Price Range: ₹ {pred_2*0.9:,.2f} - ₹ {pred_2*1.1:,.2f}\n")
 
-# =========================================
-# STEP 12 — SAVE MODEL
-# =========================================
+print("Example 3: Under Construction Independent House")
+print("-" * 60)
+pred_3 = model.predict(sample_house_3)[0]
+print(f"Area: {sample_house_3['Area'].values[0]} sq ft")
+print(f"Configuration: {sample_house_3['BHK'].values[0]} BHK, {sample_house_3['Bathroom'].values[0]} Bathrooms")
+print(f"Location: {sample_house_3['Locality'].values[0]}")
+print(f"Furnishing: {sample_house_3['Furnishing'].values[0]}")
+print(f"Predicted Price: ₹ {pred_3:,.2f}")
+print(f"Price Range: ₹ {pred_3*0.9:,.2f} - ₹ {pred_3*1.1:,.2f}\n")
 
-joblib.dump(model, "model.pkl")
-
-print("\nModel Saved Successfully!")
+print("=" * 60)
+print("✓ TEST COMPLETED SUCCESSFULLY!")
+print("=" * 60)
+print("\nTo train/retrain the model, run: python train_model.py")
+print("To start the API server, run: python backend/app.py")

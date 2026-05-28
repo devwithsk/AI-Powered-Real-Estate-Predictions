@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-05-28T18:55:59.774800",
+  "train_mae": 1479212.0524582006,
+  "test_mae": 3515469.009358472,
+  "test_r2": 0.8474677320674974,
+  "training_samples": 924,
+  "test_samples": 231,
+  "total_samples": 1155,
+  "model_type": "RandomForestRegressor",
+  "categorical_columns": [
+    "Furnishing",
+    "Locality",
+    "Status",
+    "Transaction",
+    "Type"
+  ]
+}

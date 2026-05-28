@@ -2,5 +2,8 @@ pandas
 numpy
 scikit-learn
 joblib
-flask
-flask-cors
+flask>=2.3.0
+flask-cors>=4.0.0
+flask-limiter>=3.3.0
+Werkzeug>=2.3.0
+python-dotenv>=1.0.0

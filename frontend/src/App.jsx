@@ -2,6 +2,25 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
+// =========================================
+// API CONFIGURATION
+// =========================================
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_TIMEOUT = 15000; // 15 seconds timeout
+
+// Create axios instance with default config
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// =========================================
+// UTILITY FUNCTIONS
+// =========================================
+
 // Format Indian Price (Crore, Lakh format)
 const formatIndianPrice = (price) => {
   const isNegative = price < 0;
@@ -18,6 +37,93 @@ const formatIndianPrice = (price) => {
 
   return isNegative ? `- ${formatted}` : formatted;
 };
+
+// Input validation
+const validateFormData = (formData) => {
+  const errors = [];
+  const fieldErrors = {};
+
+  const area = parseFloat(formData.area);
+  if (!formData.area || formData.area.toString().trim() === '') {
+    errors.push('Area cannot remain empty.');
+    fieldErrors.area = true;
+  } else if (isNaN(area) || area <= 0 || area > 50000) {
+    errors.push('Area must be between 100 and 50,000 sq ft.');
+    fieldErrors.area = true;
+  }
+
+  const bhk = parseInt(formData.bhk);
+  if (!formData.bhk || formData.bhk.toString().trim() === '') {
+    errors.push('BHK cannot remain empty.');
+    fieldErrors.bhk = true;
+  } else if (isNaN(bhk) || bhk < 1 || bhk > 10) {
+    errors.push('BHK must be between 1 and 10.');
+    fieldErrors.bhk = true;
+  }
+
+  const bathroom = parseInt(formData.bathroom);
+  if (!formData.bathroom || formData.bathroom.toString().trim() === '') {
+    errors.push('Bathrooms cannot remain empty.');
+    fieldErrors.bathroom = true;
+  } else if (isNaN(bathroom) || bathroom < 1 || bathroom > 8) {
+    errors.push('Bathrooms must be between 1 and 8.');
+    fieldErrors.bathroom = true;
+  }
+
+  const parking = parseInt(formData.parking);
+  if (formData.parking === '' || formData.parking.toString().trim() === '') {
+    errors.push('Parking cannot remain empty.');
+    fieldErrors.parking = true;
+  } else if (isNaN(parking) || parking < 0 || parking > 5) {
+    errors.push('Parking must be between 0 and 5.');
+    fieldErrors.parking = true;
+  }
+
+  if (!formData.locality || formData.locality.trim().length < 2) {
+    errors.push('Locality cannot remain empty.');
+    fieldErrors.locality = true;
+  }
+
+  return { errors, fieldErrors };
+};
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
+            <p className="text-5xl mb-4">❌</p>
+            <h1 className="text-2xl font-bold text-red-600 mb-3">Something went wrong</h1>
+            <p className="text-gray-600 mb-6">{this.state.error?.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function App() {
   const [formData, setFormData] = useState({
@@ -46,34 +152,62 @@ function App() {
   const [error, setError] = useState('');
   const [localitySearch, setLocalitySearch] = useState('');
   const [showLocalityDropdown, setShowLocalityDropdown] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [formValidationErrors, setFormValidationErrors] = useState([]);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
+  const getFieldStyles = (field) => {
+    const base = 'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition';
+    if (fieldErrors[field]) {
+      return `${base} border-red-500 ring-2 ring-red-200 bg-red-50 animate-shake`;
+    }
+    return `${base} border-gray-300 focus:border-transparent`;
+  };
+
+  // Fetch options on component mount
   useEffect(() => {
     fetchOptions();
   }, []);
 
+  // Fetch dropdown options from API
   const fetchOptions = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/options');
-      setOptions({
-        localities: response.data.localities,
-        furnishing: response.data.furnishing,
-        status: response.data.status,
-        transaction: response.data.transaction,
-        property_type: response.data.property_type,
-      });
+      const response = await apiClient.get('/api/options');
+      if (response.data.success) {
+        setOptions({
+          localities: response.data.localities || [],
+          furnishing: response.data.furnishing || [],
+          status: response.data.status || [],
+          transaction: response.data.transaction || [],
+          property_type: response.data.property_type || [],
+        });
+        setApiError('');
+      }
     } catch (err) {
       console.error('Error fetching options:', err);
+      setApiError('Failed to load form options. Please refresh the page.');
     }
   };
 
+  // Handle form field changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    setFormValidationErrors([]);
+
+    if (hasSubmitted) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [name]: false
+      }));
+    }
   };
 
+  // Handle locality search with debounce
   const handleLocalitySearch = (e) => {
     const value = e.target.value;
     setLocalitySearch(value);
@@ -84,6 +218,7 @@ function App() {
     setShowLocalityDropdown(value.length > 0);
   };
 
+  // Handle locality selection from dropdown
   const handleLocalitySelect = (loc) => {
     setFormData(prev => ({
       ...prev,
@@ -91,32 +226,72 @@ function App() {
     }));
     setLocalitySearch(loc);
     setShowLocalityDropdown(false);
+
+    if (hasSubmitted) {
+      setFieldErrors(prev => ({
+        ...prev,
+        locality: false
+      }));
+    }
   };
 
+  // Filter localities based on search
   const filteredLocalities = options.localities.filter(loc =>
     loc.toLowerCase().includes(localitySearch.toLowerCase())
   );
 
+  // Handle form submission with validation
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setFormValidationErrors([]);
     setPrediction(null);
+    setHasSubmitted(true);
 
+    const validation = validateFormData(formData);
+    if (validation.errors.length > 0) {
+      setFormValidationErrors(validation.errors);
+      setFieldErrors(validation.fieldErrors);
+      return;
+    }
+
+    setFieldErrors({});
+    
+    setLoading(true);
+    
     try {
-      const response = await axios.post('http://localhost:5000/api/predict', formData);
-      setPrediction(response.data.predicted_price);
-      setDisclaimer(response.data.disclaimer || '');
+      // Make prediction request
+      const response = await apiClient.post('/api/predict', formData);
+      
+      if (response.data.success) {
+        setPrediction(response.data.predicted_price);
+        setDisclaimer(response.data.disclaimer || '');
+        setError('');
+      } else {
+        setError(response.data.error || 'Failed to get prediction');
+      }
     } catch (err) {
-      setError(err.response?.data?.error || 'Error making prediction');
+      if (err.response?.data?.details) {
+        // Backend validation errors
+        setFormValidationErrors(err.response.data.details);
+        setError('Please fix the errors below and try again');
+      } else if (err.code === 'ECONNABORTED') {
+        setError('Request timeout. Please check your connection and try again.');
+      } else if (err.code === 'ERR_NETWORK') {
+        setError(`Cannot connect to API server at ${API_BASE_URL}. Please ensure the backend is running.`);
+      } else {
+        setError(err.response?.data?.error || err.message || 'An error occurred while processing your request');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Reset form for new prediction
   const handleNewPrediction = () => {
     setPrediction(null);
     setError('');
+    setFormValidationErrors([]);
     setFormData({
       area: '',
       bhk: '',
@@ -134,7 +309,7 @@ function App() {
   // Results Page View
   if (prediction) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-blue-50 text-slate-900">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Success Header */}
           <div className="text-center mb-16">
@@ -150,7 +325,7 @@ function App() {
           </div>
 
           {/* Main Price Display - Hero Section */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl shadow-2xl overflow-hidden mb-12 transform hover:scale-105 transition-transform duration-300">
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl shadow-2xl overflow-hidden mb-12 transform transition-transform duration-500 hover:-translate-y-1 hover:shadow-3xl">
             <div className="px-8 py-16 sm:px-16 text-center">
               <p className="text-blue-100 text-lg mb-4 uppercase tracking-wider font-semibold">
                 Estimated Property Value
@@ -173,8 +348,8 @@ function App() {
 
           {/* Market Range Card */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white rounded-2xl shadow-lg p-8 border-l-4 border-orange-400">
-              <p className="text-gray-600 text-sm font-semibold uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-slate-200">
+              <p className="text-slate-500 text-sm font-semibold uppercase tracking-wide mb-3">
                 Conservative Estimate
               </p>
               <p className="text-3xl font-bold text-orange-600">
@@ -183,18 +358,18 @@ function App() {
               <p className="text-gray-500 text-xs mt-2">-10% from base prediction</p>
             </div>
 
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-lg p-8 border-l-4 border-green-500 border-t-4">
-              <p className="text-gray-600 text-sm font-semibold uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-slate-200">
+              <p className="text-slate-500 text-sm font-semibold uppercase tracking-wide mb-3">
                 Market Price
               </p>
-              <p className="text-3xl font-bold text-green-600">
+              <p className="text-3xl font-bold text-emerald-600">
                 {formatIndianPrice(prediction)}
               </p>
               <p className="text-gray-500 text-xs mt-2">AI-Predicted Value</p>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg p-8 border-l-4 border-blue-400">
-              <p className="text-gray-600 text-sm font-semibold uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-3xl shadow-lg p-8 border border-slate-200">
+              <p className="text-slate-500 text-sm font-semibold uppercase tracking-wide mb-3">
                 Optimistic Estimate
               </p>
               <p className="text-3xl font-bold text-blue-600">
@@ -205,7 +380,7 @@ function App() {
           </div>
 
           {/* Property Summary - Detailed Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-10 mb-12 border-t-4 border-indigo-600">
+          <div className="bg-white/95 rounded-3xl shadow-2xl p-10 mb-12 border-t-4 border-indigo-600 backdrop-blur-sm">
             <h2 className="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-3">
               <span className="text-indigo-600">📋</span>
               Your Property Details
@@ -273,9 +448,9 @@ function App() {
           </div>
 
           {/* CTA Section */}
-          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-10 text-center mb-12 shadow-lg">
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-700 rounded-3xl p-10 text-center mb-12 shadow-2xl ring-1 ring-white/10">
             <h3 className="text-2xl font-bold text-white mb-3">Ready to Explore More Options?</h3>
-            <p className="text-indigo-100 mb-6">Analyze another property or refine your current search</p>
+            <p className="text-sky-100 mb-6">Analyze another property or refine your current search</p>
             <button
               onClick={handleNewPrediction}
               className="bg-white text-indigo-600 font-bold py-3 px-8 rounded-lg hover:bg-indigo-50 transition-all duration-200 transform hover:scale-105 shadow-lg"
@@ -300,7 +475,7 @@ function App() {
 
   // Input Form View
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-sky-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
@@ -328,8 +503,9 @@ function App() {
                   value={formData.area}
                   onChange={handleChange}
                   placeholder="e.g., 1200"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  aria-label="Property area in square feet"
+                  className={getFieldStyles('area')}
                 />
               </div>
               <div>
@@ -340,8 +516,8 @@ function App() {
                   name="bhk"
                   value={formData.bhk}
                   onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('bhk')}
                 >
                   <option value="">Select BHK</option>
                   {[1, 2, 3, 4, 5, 6].map(num => (
@@ -361,8 +537,8 @@ function App() {
                   name="bathroom"
                   value={formData.bathroom}
                   onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('bathroom')}
                 >
                   <option value="">Select Bathrooms</option>
                   {[1, 2, 3, 4, 5].map(num => (
@@ -378,8 +554,8 @@ function App() {
                   name="parking"
                   value={formData.parking}
                   onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('parking')}
                 >
                   <option value="">Select Parking</option>
                   {[0, 1, 2, 3, 4].map(num => (
@@ -400,8 +576,8 @@ function App() {
                 onChange={handleLocalitySearch}
                 onFocus={() => setShowLocalityDropdown(true)}
                 placeholder="Type locality..."
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                aria-required="true"
+                className={getFieldStyles('locality')}
               />
               {showLocalityDropdown && filteredLocalities.length > 0 && (
                 <div className="absolute z-10 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -428,7 +604,8 @@ function App() {
                   name="furnishing"
                   value={formData.furnishing}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('furnishing')}
                 >
                   {options.furnishing.map(f => (
                     <option key={f} value={f}>{f}</option>
@@ -443,7 +620,8 @@ function App() {
                   name="property_type"
                   value={formData.property_type}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('property_type')}
                 >
                   {options.property_type.map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -462,7 +640,8 @@ function App() {
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('status')}
                 >
                   {options.status.map(s => (
                     <option key={s} value={s}>{s}</option>
@@ -477,7 +656,8 @@ function App() {
                   name="transaction"
                   value={formData.transaction}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  aria-required="true"
+                  className={getFieldStyles('transaction')}
                 >
                   {options.transaction.map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -486,7 +666,26 @@ function App() {
               </div>
             </div>
 
-            {/* Error Display */}
+            {/* API Connection Error */}
+            {apiError && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-700 font-semibold">⚠️ {apiError}</p>
+              </div>
+            )}
+
+            {/* Form Validation Errors */}
+            {formValidationErrors.length > 0 && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg animate-fade-in">
+                <p className="text-red-700 font-semibold mb-2">❌ Please complete the required fields before predicting.</p>
+                <ul className="list-disc list-inside text-red-600 text-sm space-y-1">
+                  {formValidationErrors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* General Error Display */}
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-700 font-semibold">❌ {error}</p>
@@ -520,4 +719,8 @@ function App() {
   );
 }
 
-export default App;
+export default () => (
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
